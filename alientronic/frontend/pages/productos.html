@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Productos — ALIENTRONIC</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar" id="sidebar"></div>
+  <main class="main-content">
+    <div class="page-header">
+      <div class="page-title">Productos</div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary btn-sm" onclick="logout()">⏻ Salir</button>
+        <button class="btn btn-primary" onclick="openModal()">+ Nuevo Producto</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="search-bar">
+        <input class="search-input" id="search" placeholder="🔍  Buscar producto..." oninput="filterTable()">
+        <select id="filterCat" class="search-input" style="flex:0 0 180px" onchange="filterTable()">
+          <option value="">Todas las categorías</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>#</th><th>Nombre</th><th>Categoría</th><th>Proveedor</th>
+            <th>Precio</th><th>Stock</th><th>Acciones</th>
+          </tr></thead>
+          <tbody id="tableBody">
+            <tr><td colspan="7"><div class="loading"><div class="spinner"></div> Cargando...</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modalTitle">NUEVO PRODUCTO</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editId">
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Nombre del Producto</label>
+          <input type="text" id="fNombre" placeholder="Ej: MacBook Pro 14">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Descripción</label>
+          <textarea id="fDesc" placeholder="Descripción detallada..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Precio (Q)</label>
+          <input type="number" id="fPrecio" min="0.01" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label>Stock</label>
+          <input type="number" id="fStock" min="0" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>Categoría</label>
+          <select id="fCat"></select>
+        </div>
+        <div class="form-group">
+          <label>Proveedor</label>
+          <select id="fProv"></select>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="saveProducto()">Guardar</button>
+        <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+let productos = [], categorias = [], proveedores = [];
+
+(async () => {
+  const user = await checkAuth();
+  if (!user) return;
+  renderSidebar(user, 'productos.html');
+  await loadCatalogos();
+  await loadProductos();
+})();
+
+async function loadCatalogos() {
+  const [cats, provs] = await Promise.all([
+    fetch('/api/catalogos/categorias', { credentials: 'include' }).then(r => r.json()),
+    fetch('/api/catalogos/proveedores', { credentials: 'include' }).then(r => r.json()),
+  ]);
+  categorias = cats; proveedores = provs;
+
+  const fCat = document.getElementById('filterCat');
+  cats.forEach(c => fCat.innerHTML += `<option value="${c.id_categoria}">${c.nombre}</option>`);
+
+  const fCatEl = document.getElementById('fCat');
+  fCatEl.innerHTML = cats.map(c => `<option value="${c.id_categoria}">${c.nombre}</option>`).join('');
+
+  const fProvEl = document.getElementById('fProv');
+  fProvEl.innerHTML = provs.map(p => `<option value="${p.id_proveedor}">${p.nombre}</option>`).join('');
+}
+
+async function loadProductos() {
+  const res = await fetch('/api/productos', { credentials: 'include' });
+  productos = await res.json();
+  renderTable(productos);
+}
+
+function renderTable(data) {
+  const tbody = document.getElementById('tableBody');
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">◉</div><p>No se encontraron productos</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = data.map(p => `
+    <tr>
+      <td><span class="badge badge-blue">#${p.id_producto}</span></td>
+      <td><strong style="color:var(--white)">${p.nombre}</strong></td>
+      <td><span class="badge badge-orange">${p.categoria}</span></td>
+      <td style="color:var(--text2)">${p.proveedor}</td>
+      <td class="price">${fmtMoney(p.precio)}</td>
+      <td>${stockBadge(p.stock)}</td>
+      <td>
+        <button class="btn btn-secondary btn-sm" onclick="openModal(${p.id_producto})">✎ Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteProducto(${p.id_producto}, '${p.nombre.replace(/'/g,"\\'")}')">✕</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function filterTable() {
+  const q   = document.getElementById('search').value.toLowerCase();
+  const cat = document.getElementById('filterCat').value;
+  renderTable(productos.filter(p =>
+    (!q  || p.nombre.toLowerCase().includes(q) || p.descripcion.toLowerCase().includes(q)) &&
+    (!cat || String(p.id_categoria) === cat)
+  ));
+}
+
+function openModal(id = null) {
+  document.getElementById('editId').value = id || '';
+  document.getElementById('modalTitle').textContent = id ? 'EDITAR PRODUCTO' : 'NUEVO PRODUCTO';
+
+  if (id) {
+    const p = productos.find(x => x.id_producto == id);
+    document.getElementById('fNombre').value = p.nombre;
+    document.getElementById('fDesc').value   = p.descripcion;
+    document.getElementById('fPrecio').value = p.precio;
+    document.getElementById('fStock').value  = p.stock;
+    document.getElementById('fCat').value    = p.id_categoria;
+    document.getElementById('fProv').value   = p.id_proveedor;
+  } else {
+    ['fNombre','fDesc','fPrecio','fStock'].forEach(id => document.getElementById(id).value = '');
+  }
+
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+async function saveProducto() {
+  const id     = document.getElementById('editId').value;
+  const nombre = document.getElementById('fNombre').value.trim();
+  const desc   = document.getElementById('fDesc').value.trim();
+  const precio = parseFloat(document.getElementById('fPrecio').value);
+  const stock  = parseInt(document.getElementById('fStock').value);
+  const catId  = document.getElementById('fCat').value;
+  const provId = document.getElementById('fProv').value;
+
+  if (!nombre || !desc || isNaN(precio) || isNaN(stock)) {
+    toast('Por favor completa todos los campos.', 'error'); return;
+  }
+
+  const url    = id ? `/api/productos/${id}` : '/api/productos';
+  const method = id ? 'PUT' : 'POST';
+
+  const res = await fetch(url, {
+    method, credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nombre, descripcion: desc, precio, stock, id_categoria: catId, id_proveedor: provId })
+  });
+  const data = await res.json();
+
+  if (res.ok) {
+    toast(id ? 'Producto actualizado.' : 'Producto creado.', 'success');
+    closeModal();
+    await loadProductos();
+  } else {
+    toast(data.error || 'Error al guardar.', 'error');
+  }
+}
+
+async function deleteProducto(id, nombre) {
+  if (!confirm(`¿Eliminar "${nombre}"? Esta acción no se puede deshacer.`)) return;
+  const res = await fetch(`/api/productos/${id}`, { method: 'DELETE', credentials: 'include' });
+  const data = await res.json();
+  if (res.ok) {
+    toast('Producto eliminado.', 'success');
+    await loadProductos();
+  } else {
+    toast(data.error || 'Error al eliminar.', 'error');
+  }
+}
+</script>
+</body>
+</html>

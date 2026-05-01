@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clientes — ALIENTRONIC</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar" id="sidebar"></div>
+  <main class="main-content">
+    <div class="page-header">
+      <div class="page-title">Clientes</div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary btn-sm" onclick="logout()">⏻ Salir</button>
+        <button class="btn btn-primary" onclick="openModal()">+ Nuevo Cliente</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="search-bar">
+        <input class="search-input" id="search" placeholder="🔍  Buscar cliente..." oninput="filterTable()">
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>#</th><th>Nombre</th><th>Email</th><th>Teléfono</th><th>Acciones</th>
+          </tr></thead>
+          <tbody id="tableBody">
+            <tr><td colspan="5"><div class="loading"><div class="spinner"></div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modalTitle">NUEVO CLIENTE</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editId">
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Nombre Completo</label>
+          <input type="text" id="fNombre" placeholder="Ej: Carlos Mendoza">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="fEmail" placeholder="correo@ejemplo.com">
+        </div>
+        <div class="form-group">
+          <label>Teléfono</label>
+          <input type="text" id="fTel" placeholder="5534-2211">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="saveCliente()">Guardar</button>
+        <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+let clientes = [];
+
+(async () => {
+  const user = await checkAuth();
+  if (!user) return;
+  renderSidebar(user, 'clientes.html');
+  await loadClientes();
+})();
+
+async function loadClientes() {
+  const res = await fetch('/api/clientes', { credentials: 'include' });
+  clientes = await res.json();
+  renderTable(clientes);
+}
+
+function renderTable(data) {
+  const tbody = document.getElementById('tableBody');
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-icon">◎</div><p>No se encontraron clientes</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = data.map(c => `
+    <tr>
+      <td><span class="badge badge-blue">#${c.id_cliente}</span></td>
+      <td><strong style="color:var(--white)">${c.nombre}</strong></td>
+      <td style="color:var(--text2)">${c.email}</td>
+      <td style="color:var(--text2)">${c.telefono}</td>
+      <td>
+        <button class="btn btn-secondary btn-sm" onclick="openModal(${c.id_cliente})">✎ Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteCliente(${c.id_cliente}, '${c.nombre.replace(/'/g,"\\'")}')">✕</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function filterTable() {
+  const q = document.getElementById('search').value.toLowerCase();
+  renderTable(clientes.filter(c =>
+    c.nombre.toLowerCase().includes(q) ||
+    c.email.toLowerCase().includes(q) ||
+    c.telefono.includes(q)
+  ));
+}
+
+function openModal(id = null) {
+  document.getElementById('editId').value = id || '';
+  document.getElementById('modalTitle').textContent = id ? 'EDITAR CLIENTE' : 'NUEVO CLIENTE';
+
+  if (id) {
+    const c = clientes.find(x => x.id_cliente == id);
+    document.getElementById('fNombre').value = c.nombre;
+    document.getElementById('fEmail').value  = c.email;
+    document.getElementById('fTel').value    = c.telefono;
+  } else {
+    ['fNombre','fEmail','fTel'].forEach(id => document.getElementById(id).value = '');
+  }
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+async function saveCliente() {
+  const id     = document.getElementById('editId').value;
+  const nombre = document.getElementById('fNombre').value.trim();
+  const email  = document.getElementById('fEmail').value.trim();
+  const tel    = document.getElementById('fTel').value.trim();
+
+  if (!nombre || !email || !tel) {
+    toast('Todos los campos son requeridos.', 'error'); return;
+  }
+
+  const res = await fetch(id ? `/api/clientes/${id}` : '/api/clientes', {
+    method: id ? 'PUT' : 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nombre, email, telefono: tel })
+  });
+  const data = await res.json();
+
+  if (res.ok) {
+    toast(id ? 'Cliente actualizado.' : 'Cliente creado.', 'success');
+    closeModal();
+    await loadClientes();
+  } else {
+    toast(data.error || 'Error al guardar.', 'error');
+  }
+}
+
+async function deleteCliente(id, nombre) {
+  if (!confirm(`¿Eliminar a "${nombre}"?`)) return;
+  const res = await fetch(`/api/clientes/${id}`, { method: 'DELETE', credentials: 'include' });
+  const data = await res.json();
+  if (res.ok) { toast('Cliente eliminado.', 'success'); await loadClientes(); }
+  else         { toast(data.error || 'Error al eliminar.', 'error'); }
+}
+</script>
+</body>
+</html>

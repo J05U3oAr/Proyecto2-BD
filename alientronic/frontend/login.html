@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ALIENTRONIC — Login</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background-image:
+        radial-gradient(ellipse at 30% 60%, rgba(0,100,200,0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 70% 30%, rgba(0,212,255,0.06) 0%, transparent 40%),
+        linear-gradient(180deg, #050810 0%, #080c10 100%);
+    }
+
+    .login-wrap {
+      width: 100%;
+      max-width: 420px;
+      padding: 20px;
+    }
+
+    .login-logo {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .login-logo h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 2.4rem;
+      font-weight: 900;
+      color: var(--accent);
+      text-shadow: 0 0 40px rgba(0,212,255,0.6);
+      letter-spacing: 4px;
+    }
+
+    .login-logo p {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text2);
+      letter-spacing: 4px;
+      margin-top: 4px;
+    }
+
+    .login-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 36px 32px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5), var(--glow);
+    }
+
+    .login-card h2 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.85rem;
+      color: var(--text2);
+      letter-spacing: 3px;
+      margin-bottom: 28px;
+      text-align: center;
+    }
+
+    .login-card .form-group { margin-bottom: 18px; }
+
+    .login-btn {
+      width: 100%;
+      justify-content: center;
+      padding: 13px;
+      font-size: 0.9rem;
+      letter-spacing: 2px;
+      margin-top: 8px;
+      font-family: 'Orbitron', sans-serif;
+    }
+
+    .error-msg {
+      background: rgba(255,61,90,0.1);
+      border: 1px solid rgba(255,61,90,0.3);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: var(--red);
+      font-size: 0.8rem;
+      margin-top: 14px;
+      display: none;
+    }
+
+    .hint {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 0.7rem;
+      color: var(--text2);
+      font-family: 'Share Tech Mono', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-logo">
+      <h1>ALIENTRONIC</h1>
+      <p>TIENDA DE TECNOLOGÍA // SISTEMA DE GESTIÓN</p>
+    </div>
+
+    <div class="login-card">
+      <h2>ACCESO AL SISTEMA</h2>
+
+      <div class="form-group">
+        <label>Usuario</label>
+        <input type="text" id="username" placeholder="tu.usuario" autocomplete="username">
+      </div>
+
+      <div class="form-group">
+        <label>Contraseña</label>
+        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+
+      <button class="btn btn-primary login-btn" id="loginBtn" onclick="login()">
+        INGRESAR →
+      </button>
+
+      <div class="error-msg" id="errorMsg"></div>
+    </div>
+
+    <p class="hint">Credenciales demo: ana.garcia / password123</p>
+  </div>
+
+  <script>
+    // Si ya hay sesión, redirigir
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => { if (d.ok) window.location.href = '/pages/dashboard.html'; })
+      .catch(() => {});
+
+    document.getElementById('password').addEventListener('keydown', e => {
+      if (e.key === 'Enter') login();
+    });
+
+    async function login() {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const errEl    = document.getElementById('errorMsg');
+      const btn      = document.getElementById('loginBtn');
+
+      if (!username || !password) {
+        showError('Por favor ingresa usuario y contraseña.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'VERIFICANDO...';
+      errEl.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          window.location.href = '/pages/dashboard.html';
+        } else {
+          showError(data.error || 'Error al iniciar sesión.');
+        }
+      } catch {
+        showError('No se pudo conectar con el servidor.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'INGRESAR →';
+      }
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+  </script>
+</body>
+</html>

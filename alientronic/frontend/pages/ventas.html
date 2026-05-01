@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ventas — ALIENTRONIC</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .items-list { display: flex; flex-direction: column; gap: 10px; margin: 16px 0; }
+    .item-row {
+      display: grid;
+      grid-template-columns: 1fr 90px 90px 32px;
+      gap: 8px;
+      align-items: end;
+    }
+    .item-row .form-group { margin: 0; }
+    .remove-btn {
+      background: rgba(255,61,90,0.1);
+      border: 1px solid rgba(255,61,90,0.3);
+      border-radius: 8px;
+      color: var(--red);
+      cursor: pointer;
+      padding: 9px;
+      transition: all 0.2s;
+    }
+    .remove-btn:hover { background: rgba(255,61,90,0.2); }
+    .total-bar {
+      background: rgba(0,212,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 12px;
+    }
+    .total-bar .label { font-size: 0.8rem; color: var(--text2); font-family: 'Share Tech Mono', monospace; }
+    .total-bar .amount { font-family: 'Orbitron', sans-serif; font-size: 1.3rem; color: var(--green); }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar" id="sidebar"></div>
+  <main class="main-content">
+    <div class="page-header">
+      <div class="page-title">Ventas</div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary btn-sm" onclick="logout()">⏻ Salir</button>
+        <button class="btn btn-primary" onclick="openModal()">+ Nueva Venta</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>#</th><th>Fecha</th><th>Cliente</th><th>Empleado</th><th>Productos</th><th>Total</th><th>Detalle</th>
+          </tr></thead>
+          <tbody id="tableBody">
+            <tr><td colspan="7"><div class="loading"><div class="spinner"></div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal nueva venta -->
+<div class="modal-overlay" id="modal">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header">
+      <h3>NUEVA VENTA</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Cliente</label>
+          <select id="fCliente"></select>
+        </div>
+        <div class="form-group">
+          <label>Empleado</label>
+          <select id="fEmpleado"></select>
+        </div>
+        <div class="form-group">
+          <label>Fecha</label>
+          <input type="date" id="fFecha">
+        </div>
+      </div>
+
+      <div style="margin-top:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div class="card-title" style="margin:0">Productos</div>
+          <button class="btn btn-secondary btn-sm" onclick="addItem()">+ Agregar</button>
+        </div>
+        <div class="items-list" id="itemsList"></div>
+        <div class="total-bar">
+          <span class="label">TOTAL DE LA VENTA</span>
+          <span class="amount" id="totalDisplay">Q 0.00</span>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="saveVenta()">✓ Registrar Venta</button>
+        <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal detalle -->
+<div class="modal-overlay" id="modalDetalle">
+  <div class="modal" style="max-width:750px">
+    <div class="modal-header">
+      <h3 id="detalleTitulo">DETALLE DE VENTA</h3>
+      <button class="modal-close" onclick="document.getElementById('modalDetalle').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body" id="detalleBody"></div>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+let clientes = [], empleados = [], productos = [];
+
+(async () => {
+  const user = await checkAuth();
+  if (!user) return;
+  renderSidebar(user, 'ventas.html');
+
+  [clientes, empleados, productos] = await Promise.all([
+    fetch('/api/clientes',          { credentials: 'include' }).then(r => r.json()),
+    fetch('/api/catalogos/empleados',{ credentials: 'include' }).then(r => r.json()),
+    fetch('/api/productos',          { credentials: 'include' }).then(r => r.json()),
+  ]);
+
+  await loadVentas();
+})();
+
+async function loadVentas() {
+  const res   = await fetch('/api/ventas', { credentials: 'include' });
+  const data  = await res.json();
+  const tbody = document.getElementById('tableBody');
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><p>Sin ventas</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = data.map(v => `
+    <tr>
+      <td><span class="badge badge-blue">#${v.id_venta}</span></td>
+      <td>${fmtDate(v.fecha)}</td>
+      <td>${v.cliente}</td>
+      <td style="color:var(--text2)">${v.empleado}</td>
+      <td><span class="badge badge-orange">${v.num_productos || '—'} items</span></td>
+      <td class="price">${fmtMoney(v.total)}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick="verDetalle(${v.id_venta})">Ver</button></td>
+    </tr>
+  `).join('');
+}
+
+async function verDetalle(id) {
+  const res  = await fetch(`/api/ventas/${id}`, { credentials: 'include' });
+  const rows = await res.json();
+  const total = rows.reduce((s,r) => s + parseFloat(r.subtotal), 0);
+
+  document.getElementById('detalleTitulo').textContent = `DETALLE VENTA #${id}`;
+  document.getElementById('detalleBody').innerHTML = `
+    <p style="margin-bottom:16px;color:var(--text2)">
+      ${fmtDate(rows[0].fecha)} &nbsp;·&nbsp; Cliente: <strong style="color:var(--white)">${rows[0].cliente}</strong>
+      &nbsp;·&nbsp; Vendedor: ${rows[0].empleado}
+    </p>
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th>Producto</th><th>Categoría</th><th>Cant.</th><th>Precio Unit.</th><th>Subtotal</th>
+      </tr></thead><tbody>
+      ${rows.map(r => `<tr>
+        <td>${r.producto}</td>
+        <td><span class="badge badge-blue">${r.categoria}</span></td>
+        <td>${r.cantidad}</td>
+        <td class="price">${fmtMoney(r.precio_unitario)}</td>
+        <td class="price">${fmtMoney(r.subtotal)}</td>
+      </tr>`).join('')}
+      </tbody></table>
+    </div>
+    <div class="total-bar" style="margin-top:16px">
+      <span class="label">TOTAL</span>
+      <span class="amount">${fmtMoney(total)}</span>
+    </div>
+  `;
+  document.getElementById('modalDetalle').classList.add('open');
+}
+
+function openModal() {
+  // Populate selects
+  document.getElementById('fCliente').innerHTML =
+    clientes.map(c => `<option value="${c.id_cliente}">${c.nombre}</option>`).join('');
+  document.getElementById('fEmpleado').innerHTML =
+    empleados.map(e => `<option value="${e.id_empleado}">${e.nombre}</option>`).join('');
+  document.getElementById('fFecha').value = new Date().toISOString().split('T')[0];
+
+  document.getElementById('itemsList').innerHTML = '';
+  addItem();
+  updateTotal();
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+let itemCount = 0;
+function addItem() {
+  const id  = ++itemCount;
+  const opts = productos.map(p => `<option value="${p.id_producto}" data-precio="${p.precio}" data-stock="${p.stock}">${p.nombre} (Stock: ${p.stock})</option>`).join('');
+  const div = document.createElement('div');
+  div.className = 'item-row';
+  div.id = `item-${id}`;
+  div.innerHTML = `
+    <div class="form-group">
+      <label>Producto</label>
+      <select onchange="updateTotal()">${opts}</select>
+    </div>
+    <div class="form-group">
+      <label>Cant.</label>
+      <input type="number" min="1" value="1" oninput="updateTotal()">
+    </div>
+    <div class="form-group">
+      <label>Precio</label>
+      <input type="number" min="0.01" step="0.01" placeholder="Auto" oninput="updateTotal()">
+    </div>
+    <button class="remove-btn" onclick="removeItem('item-${id}')">✕</button>
+  `;
+  document.getElementById('itemsList').appendChild(div);
+  updateTotal();
+}
+
+function removeItem(id) {
+  const el = document.getElementById(id);
+  if (el) { el.remove(); updateTotal(); }
+}
+
+function updateTotal() {
+  let total = 0;
+  document.querySelectorAll('#itemsList .item-row').forEach(row => {
+    const sel   = row.querySelector('select');
+    const qty   = parseFloat(row.querySelectorAll('input')[0].value) || 0;
+    const pInp  = row.querySelectorAll('input')[1].value;
+    const opt   = sel.options[sel.selectedIndex];
+    const price = pInp ? parseFloat(pInp) : parseFloat(opt?.dataset.precio || 0);
+    total += qty * price;
+  });
+  document.getElementById('totalDisplay').textContent = fmtMoney(total);
+}
+
+async function saveVenta() {
+  const id_cliente  = document.getElementById('fCliente').value;
+  const id_empleado = document.getElementById('fEmpleado').value;
+  const fecha       = document.getElementById('fFecha').value;
+  const rows        = document.querySelectorAll('#itemsList .item-row');
+
+  if (!rows.length) { toast('Agrega al menos un producto.', 'error'); return; }
+
+  const items = [];
+  let valid = true;
+  rows.forEach(row => {
+    const sel   = row.querySelector('select');
+    const qty   = parseInt(row.querySelectorAll('input')[0].value);
+    const pInp  = row.querySelectorAll('input')[1].value;
+    const opt   = sel.options[sel.selectedIndex];
+    const price = pInp ? parseFloat(pInp) : parseFloat(opt?.dataset.precio);
+    const stock = parseInt(opt?.dataset.stock || 0);
+
+    if (!qty || qty <= 0) { toast('La cantidad debe ser mayor a 0.', 'error'); valid = false; return; }
+    if (qty > stock)      { toast(`Stock insuficiente: "${opt.text.split('(')[0].trim()}" solo tiene ${stock}.`, 'error'); valid = false; return; }
+    items.push({ id_producto: sel.value, cantidad: qty, precio_unitario: price });
+  });
+
+  if (!valid) return;
+
+  const res = await fetch('/api/ventas', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id_cliente, id_empleado, fecha, items })
+  });
+  const data = await res.json();
+
+  if (res.ok) {
+    toast(`Venta #${data.id_venta} registrada con éxito.`, 'success');
+    closeModal();
+    await loadVentas();
+    // Refresh productos stock
+    productos = await fetch('/api/productos', { credentials: 'include' }).then(r => r.json());
+  } else {
+    toast(data.error || 'Error al registrar venta.', 'error');
+  }
+}
+</script>
+</body>
+</html>

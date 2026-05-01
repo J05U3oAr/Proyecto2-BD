@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reportes — ALIENTRONIC</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .report-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text2);
+      font-size: 0.78rem;
+      cursor: pointer;
+      font-family: 'Share Tech Mono', monospace;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .tab-btn.active, .tab-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(0,212,255,0.06);
+    }
+    .sql-tag {
+      display: inline-block;
+      background: rgba(0,212,255,0.08);
+      border: 1px solid rgba(0,212,255,0.2);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 0.65rem;
+      font-family: 'Share Tech Mono', monospace;
+      color: var(--accent);
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar" id="sidebar"></div>
+  <main class="main-content">
+    <div class="page-header">
+      <div class="page-title">Reportes SQL</div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary btn-sm" onclick="logout()">⏻ Salir</button>
+        <a class="btn btn-success btn-sm" href="/api/reportes/exportar-ventas-csv" target="_blank">⬇ Exportar CSV</a>
+      </div>
+    </div>
+
+    <div class="report-tabs">
+      <button class="tab-btn active" onclick="showReport('ventas-resumen',this)">Resumen Ventas <span class="sql-tag">JOIN</span></button>
+      <button class="tab-btn" onclick="showReport('productos-detalle',this)">Catálogo Productos <span class="sql-tag">JOIN</span></button>
+      <button class="tab-btn" onclick="showReport('top-productos',this)">Top Productos <span class="sql-tag">JOIN</span></button>
+      <button class="tab-btn" onclick="showReport('empleados-ventas',this)">Empleados <span class="sql-tag">GROUP BY + HAVING</span></button>
+      <button class="tab-btn" onclick="showReport('clientes-laptops',this)">Clientes Laptops <span class="sql-tag">SUBQUERY IN</span></button>
+      <button class="tab-btn" onclick="showReport('productos-sin-ventas',this)">Sin Ventas <span class="sql-tag">SUBQUERY EXISTS</span></button>
+      <button class="tab-btn" onclick="showReport('ventas-mensuales',this)">Ventas Mensuales <span class="sql-tag">CTE WITH</span></button>
+    </div>
+
+    <div class="card">
+      <div id="reportTitle" class="card-title">RESUMEN DE VENTAS</div>
+      <div id="reportContent"><div class="loading"><div class="spinner"></div> Cargando reporte...</div></div>
+    </div>
+  </main>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+const reportConfig = {
+  'ventas-resumen': {
+    title: 'RESUMEN DE VENTAS — JOIN (venta + cliente + empleado + detalle)',
+    render: rows => `
+      <div class="table-wrap"><table><thead><tr>
+        <th>#</th><th>Fecha</th><th>Cliente</th><th>Email</th><th>Empleado</th><th>Puesto</th><th># Prod</th><th>Total</th>
+      </tr></thead><tbody>
+      ${rows.map(r => `<tr>
+        <td><span class="badge badge-blue">#${r.id_venta}</span></td>
+        <td>${fmtDate(r.fecha)}</td>
+        <td><strong style="color:var(--white)">${r.cliente}</strong></td>
+        <td style="color:var(--text2);font-size:.8rem">${r.email_cliente}</td>
+        <td>${r.empleado}</td>
+        <td><span class="badge badge-orange">${r.puesto}</span></td>
+        <td style="text-align:center">${r.num_productos}</td>
+        <td class="price">${fmtMoney(r.total)}</td>
+      </tr>`).join('')}
+      </tbody></table></div>`
+  },
+  'productos-detalle': {
+    title: 'CATÁLOGO DE PRODUCTOS — JOIN (producto + categoría + proveedor)',
+    render: rows => `
+      <div class="table-wrap"><table><thead><tr>
+        <th>#</th><th>Nombre</th><th>Precio</th><th>Stock</th><th>Categoría</th><th>Proveedor</th><th>Email Proveedor</th>
+      </tr></thead><tbody>
+      ${rows.map(r => `<tr>
+        <td><span class="badge badge-blue">#${r.id_producto}</span></td>
+        <td>${r.nombre}</td>
+        <td class="price">${fmtMoney(r.precio)}</td>
+        <td>${stockBadge(r.stock)}</td>
+        <td><span class="badge badge-orange">${r.categoria}</span></td>
+        <td>${r.proveedor}</td>
+        <td style="color:var(--text2);font-size:.8rem">${r.email_proveedor}</td>
+      </tr>`).join('')}
+      </tbody></table></div>`
+  },
+  'top-productos': {
+    title: 'TOP PRODUCTOS MÁS VENDIDOS — JOIN múltiple + GROUP BY',
+    render: rows => `
+      <div class="table-wrap"><table><thead><tr>
+        <th>Pos.</th><th>Producto</th><th>Categoría</th><th>Unidades Vendidas</th><th>Ingresos Totales</th><th>Stock Actual</th>
+      </tr></thead><tbody>
+      ${rows.map((r,i) => `<tr>
+        <td><span class="badge ${i<3 ? 'badge-yellow':'badge-blue'}">#${i+1}</span></td>
+        <td><strong style="color:var(--white)">${r.producto}</strong></td>
+        <td><span class="badge badge-orange">${r.categoria}</span></td>
+        <td style="text-align:center;font-family:'Share Tech Mono',monospace">${r.total_vendido}</td>
+        <td class="price">${fmtMoney(r.ingresos_totales)}</td>
+        <td>${stockBadge(r.stock_actual)}</td>
+      </tr>`).join('')}
+      </tbody></table></div>`
+  },
+  'empleados-ventas': {
+    title: 'EMPLEADOS CON MÁS DE 3 VENTAS — GROUP BY + HAVING + funciones agregación',
+    render: rows => rows.length ? `
+      <div class="table-wrap"><table><thead><tr>
+        <th>Empleado</th><th>Puesto</th><th>Total Ventas</th><th>Ingresos Totales</th><th>Promedio por Venta</th>
+      </tr></thead><tbody>
+      ${rows.map(r => `<tr>
+        <td><strong style="color:var(--white)">${r.empleado}</strong></td>
+        <td><span class="badge badge-orange">${r.puesto}</span></td>
+        <td style="text-align:center">${r.total_ventas}</td>
+        <td class="price">${fmtMoney(r.total_ingresos)}</td>
+        <td class="price">${fmtMoney(r.promedio_por_venta)}</td>
+      </tr>`).join('')}
+      </tbody></table></div>` :
+      `<div class="empty"><p>Ningún empleado supera 3 ventas aún.</p></div>`
+  },
+  'clientes-laptops': {
+    title: 'CLIENTES QUE HAN COMPRADO LAPTOPS — Subquery con IN',
+    render: rows => rows.length ? `
+      <div class="table-wrap"><table><thead><tr>
+        <th>Nombre</th><th>Email</th><th>Teléfono</th>
+      </tr></thead><tbody>
+      ${rows.map(r => `<tr>
+        <td><strong style="color:var(--white)">${r.nombre}</strong></td>
+        <td style="color:var(--text2)">${r.email}</td>
+        <td>${r.telefono}</td>
+      </tr>`).join('')}
+      </tbody></table></div>` :
+      `<div class="empty"><p>Sin resultados.</p></div>`
+  },
+  'productos-sin-ventas': {
+    title: 'PRODUCTOS QUE NO HAN SIDO VENDIDOS — Subquery con NOT EXISTS',
+    render: rows => rows.length ? `
+      <div class="table-wrap"><table><thead><tr>
+        <th>Nombre</th><th>Precio</th><th>Stock</th><th>Categoría</th>
+      </tr></thead><tbody>
+      ${rows.map(r => `<tr>
+        <td>${r.nombre}</td>
+        <td class="price">${fmtMoney(r.precio)}</td>
+        <td>${stockBadge(r.stock)}</td>
+        <td><span class="badge badge-orange">${r.categoria}</span></td>
+      </tr>`).join('')}
+      </tbody></table></div>` :
+      `<div class="empty"><p>Todos los productos han tenido ventas. 🎉</p></div>`
+  },
+  'ventas-mensuales': {
+    title: 'VENTAS MENSUALES CON RANKING — CTE (WITH) + Window Function',
+    render: rows => `
+      <div class="table-wrap"><table><thead><tr>
+        <th>Mes</th><th>Num. Ventas</th><th>Total del Mes</th><th>Ranking</th>
+      </tr></thead><tbody>
+      ${rows.map(r => `<tr>
+        <td style="font-family:'Share Tech Mono',monospace">${r.mes}</td>
+        <td style="text-align:center">${r.num_ventas}</td>
+        <td class="price">${fmtMoney(r.total_mes)}</td>
+        <td><span class="badge ${r.ranking == 1 ? 'badge-yellow' : r.ranking <= 3 ? 'badge-green' : 'badge-blue'}">#${r.ranking}</span></td>
+      </tr>`).join('')}
+      </tbody></table></div>`
+  }
+};
+
+async function showReport(key, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  const cfg = reportConfig[key];
+  document.getElementById('reportTitle').textContent = cfg.title;
+  document.getElementById('reportContent').innerHTML = '<div class="loading"><div class="spinner"></div> Ejecutando consulta...</div>';
+
+  try {
+    const res  = await fetch(`/api/reportes/${key}`, { credentials: 'include' });
+    const data = await res.json();
+    document.getElementById('reportContent').innerHTML = cfg.render(data);
+  } catch {
+    document.getElementById('reportContent').innerHTML = '<div class="empty"><p>Error al cargar el reporte.</p></div>';
+  }
+}
+
+(async () => {
+  const user = await checkAuth();
+  if (!user) return;
+  renderSidebar(user, 'reportes.html');
+  showReport('ventas-resumen');
+})();
+</script>
+</body>
+</html>
