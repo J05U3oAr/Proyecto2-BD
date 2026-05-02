@@ -196,13 +196,13 @@ INSERT INTO empleado (nombre, puesto) VALUES
     ('Marcos Ruiz',      'Vendedor'),
     ('Elena Vargas',     'Administrador');
 
--- Usuarios (5) - passwords hasheadas con bcrypt (valor: "password123")
+-- Usuarios (5) - passwords hasheadas con bcrypt (valor: "admin123")
 INSERT INTO usuario (username, password_hash, id_empleado) VALUES
-    ('ana.garcia',    '$2b$10$XQxBHmA9rEf3vKz8ePqNaOkT7uWlYmN2cRdSoP1jHgF4iBnMeVtLu', 1),
-    ('pedro.hdz',     '$2b$10$mNpQrStUvWxYzAbCdEfGhIjKlMnOpQrStUvWxYzAbCdEfGhIjKlMn', 2),
-    ('laura.jimenez', '$2b$10$AbCdEfGhIjKlMnOpQrStUvWxYzAbCdEfGhIjKlMnOpQrStUvWxYzA', 3),
-    ('marcos.ruiz',   '$2b$10$ZyXwVuTsRqPoNmLkJiHgFeDcBaZyXwVuTsRqPoNmLkJiHgFeDcBaZ', 4),
-    ('elena.vargas',  '$2b$10$QpRoSnTmUlVkWjXiYhZgAfBeDcGhIjKlMnOpQrStUvWxYzAbCdEfG', 5);
+    ('admin',         '$2b$10$4IVE3wT53RZC0hOjqb8uM.5v5zvMesMpDnhQREDj81i3ew.ASDYdW', 1),
+    ('pedro.hdz',     '$2b$10$4IVE3wT53RZC0hOjqb8uM.5v5zvMesMpDnhQREDj81i3ew.ASDYdW', 2),
+    ('laura.jimenez', '$2b$10$4IVE3wT53RZC0hOjqb8uM.5v5zvMesMpDnhQREDj81i3ew.ASDYdW', 3),
+    ('marcos.ruiz',   '$2b$10$4IVE3wT53RZC0hOjqb8uM.5v5zvMesMpDnhQREDj81i3ew.ASDYdW', 4),
+    ('elena.vargas',  '$2b$10$4IVE3wT53RZC0hOjqb8uM.5v5zvMesMpDnhQREDj81i3ew.ASDYdW', 5);
 
 -- Ventas (25)
 INSERT INTO venta (fecha, id_cliente, id_empleado) VALUES
