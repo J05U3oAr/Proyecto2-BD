@@ -173,6 +173,63 @@ alientronic/
 
 ---
 
+## Normalizacion de la base de datos
+
+La base de datos del sistema fue normalizada siguiendo las formas normales hasta FNBC, garantizando integridad, eliminacion de redundancias y consistencia en los datos.
+
+### Primera Forma Normal (1FN)
+
+Todas las tablas cumplen con los requisitos de 1FN:
+
+| Tabla | Clave primaria | Atributos atomicos | Sin grupos repetitivos | Cumple |
+|-------|----------------|--------------------|------------------------|--------|
+| cliente | id_cliente | Si | Si | Si |
+| empleado | id_empleado | Si | Si | Si |
+| proveedor | id_proveedor | Si | Si | Si |
+| categoria | id_categoria | Si | Si | Si |
+| producto | id_producto | Si | Si | Si |
+| venta | id_venta | Si | Si | Si |
+| detalle_venta | id_detalle | Si | Si | Si |
+
+Todas las columnas contienen valores atomicos y no existen atributos multivaluados ni estructuras repetitivas.
+
+### Segunda Forma Normal (2FN)
+
+Se verifica que no existen dependencias parciales:
+
+| Tabla | Clave primaria | Dependencias parciales | Descripcion | Cumple |
+|-------|----------------|------------------------|-------------|--------|
+| venta | id_venta | No | Todos los atributos dependen de la PK | Si |
+| detalle_venta | id_detalle | No | Dependencia completa de la clave primaria | Si |
+
+La tabla `detalle_venta` utiliza una clave primaria artificial (`id_detalle`), lo que garantiza que todos los atributos dependan completamente de la clave.
+
+### Tercera Forma Normal (3FN)
+
+Se evaluan posibles dependencias transitivas:
+
+| Tabla | Dependencia transitiva | Atributo | Justificacion | Cumple |
+|-------|------------------------|----------|---------------|--------|
+| detalle_venta | Posible | precio_unitario | Se guarda como historico de la venta | Si |
+
+Aunque `precio_unitario` podria derivarse de `producto.precio`, se almacena para conservar el valor al momento de la transaccion, lo cual es una practica estandar en sistemas de ventas.
+
+### Forma Normal de Boyce-Codd (FNBC)
+
+Se valida que todos los determinantes sean superllaves:
+
+| Tabla | Determinante | Es superllave | Cumple |
+|-------|--------------|---------------|--------|
+| cliente | id_cliente | Si | Si |
+| empleado | id_empleado | Si | Si |
+| producto | id_producto | Si | Si |
+| venta | id_venta | Si | Si |
+| detalle_venta | id_detalle | Si | Si |
+
+En las tablas principales, cada dependencia funcional tiene como determinante una clave candidata o superllave. Por ello, el esquema se considera consistente hasta FNBC dentro del alcance del proyecto.
+
+---
+
 ## API endpoints
 
 ### Auth
